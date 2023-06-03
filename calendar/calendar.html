@@ -6,131 +6,165 @@
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
     <style>
 body {
-	margin: 0;
+  margin: 0;
 }
 
-#calendar-wrapper {
-	display: grid;
-	grid-template-columns: repeat(7, 1fr);
-	height: 100vh;
+#calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  height: calc(100vh - 18px);
 }
 
 .five-rows {
-	grid-template-rows: auto repeat(5, 1fr);
+  grid-template-rows: auto repeat(5, 1fr);
 }
-	
+
 .six-rows {
-	grid-template-rows: auto repeat(6, 1fr);
+  grid-template-rows: auto repeat(6, 1fr);
 }
 
 /* top border on first 7 blocks (top row) */
 .calendar-block:nth-child(-n+7) {
-	border-top: 1px solid black;
+  border-top: 1px solid black;
 }
 
 /* left border on every 7th block (left column) */
 .calendar-block:nth-child(7n+1) {
-	border-left: 1px solid black;
+  border-left: 1px solid black;
 }
 
 /* bottom and right border on every block */
 .calendar-block {
-	width: 100%;
-	height: auto;
-	border-right: 1px solid black;
-	border-bottom: 1px solid black;
-	box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+  height: auto;
+  border-right: 1px solid black;
+  border-bottom: 1px solid black;
+  box-sizing: border-box;
+  padding: 2px 5px;
 }
 
 .five-rows .calendar-block.sixth-row {
-	display: none;
-}
-
-.calendar-block > span {
-	margin-left: 5px;
-	margin-top: 2px;
+  display: none;
 }
 
 .center {
-	text-align: center;
+  text-align: center;
 }
 
-.d-flex {
-	display: flex;
+.d-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.d-none {
+  display: none;
+}
+
+p.event {
+  margin: 0 0 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  background-color: #eee;
+  border-radius: 10px;
+  padding-left: 5px;
 }
 
     </style>
   </head>
   <body>
-    <div id="calendar-wrapper" class="six-rows">
-	    <div class="calendar-block center">Sunday</div>
-	    <div class="calendar-block center">Monday</div>
-	    <div class="calendar-block center">Tuesday</div>
-	    <div class="calendar-block center">Wednesday</div>
-	    <div class="calendar-block center">Thursday</div>
-	    <div class="calendar-block center">Friday</div>
-	    <div class="calendar-block center">Saturday</div>
+    <div id="errors">Please map all columns</div>
+    <div id="calendar-wrapper" class="d-none">
+      <div id="month-year" class="center"></div>
+      <div id="calendar-grid" class="six-rows">
+        <div class="calendar-block center">Sunday</div>
+        <div class="calendar-block center">Monday</div>
+        <div class="calendar-block center">Tuesday</div>
+        <div class="calendar-block center">Wednesday</div>
+        <div class="calendar-block center">Thursday</div>
+        <div class="calendar-block center">Friday</div>
+        <div class="calendar-block center">Saturday</div>
 
-	    <div class="calendar-block d-flex" id="block0"><span></span></div>
-	    <div class="calendar-block d-flex" id="block1"><span></span></div>
-	    <div class="calendar-block d-flex" id="block2"><span></span></div>
-	    <div class="calendar-block d-flex" id="block3"><span></span></div>
-	    <div class="calendar-block d-flex" id="block4"><span></span></div>
-	    <div class="calendar-block d-flex" id="block5"><span></span></div>
-	    <div class="calendar-block d-flex" id="block6"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block0"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block1"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block2"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block3"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block4"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block5"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block6"><span></span></div>
 
-	    <div class="calendar-block d-flex" id="block7"><span></span></div>
-	    <div class="calendar-block d-flex" id="block8"><span></span></div>
-	    <div class="calendar-block d-flex" id="block9"><span></span></div>
-	    <div class="calendar-block d-flex" id="block10"><span></span></div>
-	    <div class="calendar-block d-flex" id="block11"><span></span></div>
-	    <div class="calendar-block d-flex" id="block12"><span></span></div>
-	    <div class="calendar-block d-flex" id="block13"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block7"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block8"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block9"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block10"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block11"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block12"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block13"><span></span></div>
 
-	    <div class="calendar-block d-flex" id="block14"><span></span></div>
-	    <div class="calendar-block d-flex" id="block15"><span></span></div>
-	    <div class="calendar-block d-flex" id="block16"><span></span></div>
-	    <div class="calendar-block d-flex" id="block17"><span></span></div>
-	    <div class="calendar-block d-flex" id="block18"><span></span></div>
-	    <div class="calendar-block d-flex" id="block19"><span></span></div>
-	    <div class="calendar-block d-flex" id="block20"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block14"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block15"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block16"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block17"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block18"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block19"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block20"><span></span></div>
 
-	    <div class="calendar-block d-flex" id="block21"><span></span></div>
-	    <div class="calendar-block d-flex" id="block22"><span></span></div>
-	    <div class="calendar-block d-flex" id="block23"><span></span></div>
-	    <div class="calendar-block d-flex" id="block24"><span></span></div>
-	    <div class="calendar-block d-flex" id="block25"><span></span></div>
-	    <div class="calendar-block d-flex" id="block26"><span></span></div>
-	    <div class="calendar-block d-flex" id="block27"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block21"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block22"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block23"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block24"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block25"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block26"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block27"><span></span></div>
 
-	    <div class="calendar-block d-flex" id="block28"><span></span></div>
-	    <div class="calendar-block d-flex" id="block29"><span></span></div>
-	    <div class="calendar-block d-flex" id="block30"><span></span></div>
-	    <div class="calendar-block d-flex" id="block31"><span></span></div>
-	    <div class="calendar-block d-flex" id="block32"><span></span></div>
-	    <div class="calendar-block d-flex" id="block33"><span></span></div>
-	    <div class="calendar-block d-flex" id="block34"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block28"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block29"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block30"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block31"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block32"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block33"><span></span></div>
+        <div class="calendar-block d-flex-col" id="block34"><span></span></div>
 
-	    <div class="calendar-block d-flex sixth-row" id="block35"><span></span></div>
-	    <div class="calendar-block d-flex sixth-row" id="block36"><span></span></div>
-	    <div class="calendar-block d-flex sixth-row" id="block37"><span></span></div>
-	    <div class="calendar-block d-flex sixth-row" id="block38"><span></span></div>
-	    <div class="calendar-block d-flex sixth-row" id="block39"><span></span></div>
-	    <div class="calendar-block d-flex sixth-row" id="block40"><span></span></div>
-	    <div class="calendar-block d-flex sixth-row" id="block41"><span></span></div>
-	    
+        <div class="calendar-block d-flex-col sixth-row" id="block35"><span></span></div>
+        <div class="calendar-block d-flex-col sixth-row" id="block36"><span></span></div>
+        <div class="calendar-block d-flex-col sixth-row" id="block37"><span></span></div>
+        <div class="calendar-block d-flex-col sixth-row" id="block38"><span></span></div>
+        <div class="calendar-block d-flex-col sixth-row" id="block39"><span></span></div>
+        <div class="calendar-block d-flex-col sixth-row" id="block40"><span></span></div>
+        <div class="calendar-block d-flex-col sixth-row" id="block41"><span></span></div>
+
+      </div>
     </div>
 
     <script>
-      function buildCalendar(target) {
-        let calendarWrapper = document.getElementById("calendar-wrapper");
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+      function buildCalendar(target, events) {
+        let monthYear = document.getElementById('month-year');
+        let calendarWrapper = document.getElementById('calendar-wrapper');
+        let calendarGrid = document.getElementById('calendar-grid');
+        let errorsDiv = document.getElementById('errors');
+
+        // show calendar, hide errors
+        calendarWrapper.classList.remove('d-none');
+        errorsDiv.classList.add('d-none');
+
+        // set calendar title
+        monthYear.innerText = `${months[target.getMonth()]} ${target.getFullYear()}`;
       
         // start with just 5 rows in calendar
-        calendarWrapper.classList.remove('six-rows');
-        calendarWrapper.classList.add('five-rows');
+        calendarGrid.classList.remove('six-rows');
+        calendarGrid.classList.add('five-rows');
       
         function getFirstIndexOfMonth(target) {
           return new Date(target.getFullYear(), target.getMonth(), 1).getDay();
+        }
+
+        function equalDates(date1, date2) {
+            return date1.getFullYear() == date2.getFullYear() &&
+                   date1.getMonth() == date2.getMonth() &&
+                   date1.getDate() == date2.getDate();
         }
       
         const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
@@ -138,17 +172,31 @@ body {
         let numDaysInMonth = daysInMonth(target.getFullYear(), target.getMonth()+1);
         let index = getFirstIndexOfMonth(target);
       
-        console.log(`target: ${target}`);
-        console.log(`getFirstIndexOfMonth: ${index}`);
-        console.log(`numDaysInMonth: ${numDaysInMonth}`);
-      
         for (let i = 1; i <= numDaysInMonth; i++) {
-          console.log(`block${index}`);
+          let blockDate = new Date(target.getFullYear(), target.getMonth(), i);
+          let blockEvents = events.filter((e) => equalDates(e.Date, blockDate));
           let block = document.getElementById(`block${index}`);
+
+          // remove any previous events
+          let oldEvents = block.querySelectorAll('p.event');
+          for (let oldEvent of oldEvents) {
+            oldEvent.remove();
+          }
+
           if (block) {
             let span = block.querySelector('span');
-            console.log(span);
             span.innerText = `${i}`;
+
+            if (blockEvents) {
+              for (let e = 0; e < blockEvents.length; e++) {
+                let event = blockEvents[e];
+                let eventP = document.createElement('p');
+                eventP.classList.add('event');
+                eventP.innerText = event.Text;
+                eventP.title = event.Text;
+                block.appendChild(eventP);
+              }
+            }
           }
           if (index >= 35) {
             // we have six rows
@@ -160,12 +208,29 @@ body {
         }
       }
       
-      let target = new Date(2023, 4, 15);
-      buildCalendar(target);
-      
-      grist.ready();
-      grist.onRecords(function(records) {
-        // document.getElementById('readout').innerHTML = JSON.stringify(records, null, 2);
+      grist.ready({
+        requiredAccess: 'read table',
+        columns: [
+          {
+            name: 'Date',
+            type: 'Date',
+          },
+          {
+            name: 'Text',
+            type: 'Text',
+          }
+        ]
+      });
+      grist.onRecords(function(records, mappings) {
+          let rows = grist.mapColumnNames(records, mappings);
+          if (rows) {
+            let today = new Date();
+            let filteredRows = rows.filter(e => e.Text != '' && e.Date && e.Date.getMonth() == today.getMonth());
+            buildCalendar(today, filteredRows);
+          } else {
+            document.getElementById('errors').classList.remove('d-none');
+            document.getElementById('calendar-wrapper').classList.add('d-none');
+          }
       });
     </script>
   </body>
