@@ -18,10 +18,74 @@ const Latitude = "Latitude";
 const Geocode = 'Geocode';
 // Optional - but required for geocoding. Field with address to find (might be formula)
 const Address = 'Address';
-// Optional - but 
+// Optional - but useful for geocoding. Blank field which map uses
+//            to store last geocoded Address. Enables map widget
+//            to automatically update the geocoding if Address is changed
 const GeocodedAddress = 'GeocodedAddress';
 let lastRecord;
 let lastRecords;
+
+
+//Color markers downloaded from leaflet repo, color-shifted to green
+//Used to show currently selected pin
+const selectedIcon =  new L.Icon({
+  iconUrl: 'marker-icon-green.png',
+  iconRetinaUrl: 'marker-icon-green-2x.png',
+  shadowUrl: 'marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+const defaultIcon =  new L.Icon.Default();
+
+
+
+// Creates clusterIcons that highlight if they contain selected row
+// Given a function `() => selectedMarker`, return a cluster icon create function
+// that can be passed to MarkerClusterGroup({iconCreateFunction: ... } )
+//
+// Cluster with selected record gets the '.marker-cluster-selected' class
+// (defined in screen.css)
+//
+// Copied from _defaultIconCreateFunction in ClusterMarkerGroup
+//    https://github.com/Leaflet/Leaflet.markercluster/blob/master/src/MarkerClusterGroup.js
+const selectedRowClusterIconFactory = function (selectedMarkerGetter) {
+  return function(cluster) {
+    var childCount = cluster.getChildCount();
+
+    let isSelected = false;
+    try {
+      const selectedMarker = selectedMarkerGetter();
+
+      // hmm I think this is n log(n) to build all the clusters for the whole map.
+      // It's probably fine though, it only fires once when map markers
+      // are set up or when selectedRow changes
+      isSelected = cluster.getAllChildMarkers().filter((m) => m == selectedMarker).length > 0;
+    } catch (e) {
+      console.error("WARNING: Error in clusterIconFactory in map widget");
+      console.error(e);
+    }
+
+    var c = ' marker-cluster-';
+    if (childCount < 10) {
+      c += 'small';
+    } else if (childCount < 100) {
+      c += 'medium';
+    } else {
+      c += 'large';
+    }
+
+    return new L.DivIcon({
+        html: '<div><span>'
+            + childCount
+            + ' <span aria-label="markers"></span>'
+            + '</span></div>',
+        className: 'marker-cluster' + c + (isSelected ? ' marker-cluster-selected' : ''),
+        iconSize: new L.Point(40, 40)
+    });
+  }
+};
 
 const geocoder = L.Control.Geocoder && L.Control.Geocoder.nominatim();
 if (URLSearchParams && location.search && geocoder) {
@@ -126,6 +190,11 @@ function getInfo(rec) {
   return result;
 }
 
+// Function to clear last added markers. Used to clear the map when new record is selected.
+let clearMakers = () => {};
+
+let markers = [];
+
 function updateMap(data) {
   data = data || selectedRecords;
   selectedRecords = data;
@@ -138,10 +207,17 @@ function updateMap(data) {
     " in the Creator Panel.");
     return;
   }
-  const tiles = L.tileLayer('//server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 18,
-    attribution: 'Tiles &copy; Esri &mdash; National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC'
+
+
+  // Map tile source:
+  //    https://leaflet-extras.github.io/leaflet-providers/preview/
+  //    Old source was natgeo world map, but that only has data up to zoom 16
+  //    (can't zoom in tighter than about 10 city blocks across)
+  //
+  const tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
   });
+
   const error = document.querySelector('.error');
   if (error) { error.remove(); }
   if (amap) {
@@ -153,48 +229,111 @@ function updateMap(data) {
       console.warn(e);
     }
   }
-  const map = L.map('map', {layers: [tiles]});
-  const markers = L.markerClusterGroup();
-  const points = [];
-  popups = {};
+  const map = L.map('map', {
+    layers: [tiles],
+    wheelPxPerZoomLevel: 90, //px, default 60, slows scrollwheel zoom
+  });
+
+  // Make sure clusters always show up above points
+  // Default z-index for markers is 600, 650 is where tooltipPane z-index starts
+  map.createPane('selectedMarker').style.zIndex = 620;
+  map.createPane('clusters'      ).style.zIndex = 610;
+  map.createPane('otherMarkers'  ).style.zIndex = 600;
+
+  const points = []; //L.LatLng[], used for zooming to bounds of all markers
+
+  popups = {}; // Map: {[rowid]: L.marker}
+  // Make this before markerClusterGroup so iconCreateFunction
+  // can fetch the currently selected marker from popups by function closure
+
+  markers = L.markerClusterGroup({
+    disableClusteringAtZoom: 18,
+    //If markers are very close together, they'd stay clustered even at max zoom
+    //This disables that behavior explicitly for max zoom (18)
+    maxClusterRadius: 30, //px, default 80
+    // default behavior clusters too aggressively. It's nice to see individual markers
+    showCoverageOnHover: true,
+
+    clusterPane: 'clusters', //lets us specify z-index, so cluster icons can be on top
+    iconCreateFunction: selectedRowClusterIconFactory(() => popups[selectedRowId]),
+  });
+
+  markers.on('click', (e) => {
+    const id = e.layer.options.id;
+    selectMaker(id);
+  });
+
   for (const rec of data) {
     const {id, name, lng, lat} = getInfo(rec);
+    // If the record is in the middle of geocoding, skip it.
     if (String(lng) === '...') { continue; }
     if (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01) {
       // Stuff at 0,0 usually indicates bad imports/geocoding.
       continue;
     }
     const pt = new L.LatLng(lat, lng);
-    const title = name;
-    const marker = L.marker(pt, { title  });
     points.push(pt);
-    marker.bindPopup(title);
+
+    const marker = L.marker(pt, {
+      title: name,
+      id: id,
+      icon: (id == selectedRowId) ?  selectedIcon    :  defaultIcon,
+      pane: (id == selectedRowId) ? "selectedMarker" : "otherMarkers",
+    });
+
+    marker.bindPopup(name);
     markers.addLayer(marker);
+
     popups[id] = marker;
   }
   map.addLayer(markers);
+
+  clearMakers = () => map.removeLayer(markers);
+
   try {
-    map.fitBounds(new L.LatLngBounds(points), {maxZoom: 12, padding: [0, 0]});
+    map.fitBounds(new L.LatLngBounds(points), {maxZoom: 15, padding: [0, 0]});
   } catch (err) {
     console.warn('cannot fit bounds');
   }
   function makeSureSelectedMarkerIsShown() {
     const rowId = selectedRowId;
+
     if (rowId && popups[rowId]) {
       var marker = popups[rowId];
-      if (!marker._icon) { marker.__parent.spiderfy(); }
+      if (!marker._icon) { markers.zoomToShowLayer(marker); }
       marker.openPopup();
     }
   }
-  map.on('zoomend', () => {
-    // Should reshow marker if it has been lost, but I didn't find a good
-    // event to trigger that exactly. A small timeout seems to work :-(
-    // TODO: find a better way; also, if user has changed selection within
-    // the map we should respect that.
-    setTimeout(makeSureSelectedMarkerIsShown, 500);
-  });
+
   amap = map;
+
   makeSureSelectedMarkerIsShown();
+}
+
+function selectMaker(id) {
+   // Reset the options from the previously selected marker.
+   const previouslyClicked = popups[selectedRowId];
+   if (previouslyClicked) {
+     previouslyClicked.setIcon(defaultIcon);
+     previouslyClicked.pane = 'otherMarkers';
+   }
+   const marker = popups[id];
+   if (!marker) { return null; }
+
+   // Remember the new selected marker.
+   selectedRowId = id;
+
+   // Set the options for the newly selected marker.
+   marker.setIcon(selectedIcon);
+   previouslyClicked.pane = 'selectedMarker';
+
+   // Rerender markers in this cluster
+   markers.refreshClusters();
+
+   // Update the selected row in Grist.
+   grist.setCursorPos?.({rowId: id}).catch(() => {});
+
+   return marker;
 }
 
 
@@ -221,6 +360,9 @@ function defaultMapping(record, mappings) {
 }
 
 function selectOnMap(rec) {
+  // If this is already selected row, do nothing (to avoid flickering)
+  if (selectedRowId === rec.id) { return; }
+
   selectedRowId = rec.id;
   if (mode === 'single') {
     updateMap([rec]);
@@ -230,13 +372,18 @@ function selectOnMap(rec) {
 }
 
 grist.onRecord((record, mappings) => {
-  // If mappings are not done, we will assume that table has correct columns.
-  // This is done to support existing widgets which where configured by
-  // renaming column names.
-  lastRecord = grist.mapColumnNames(record) || record;
-  selectOnMap(lastRecord);
   if (mode === 'single') {
+    // If mappings are not done, we will assume that table has correct columns.
+    // This is done to support existing widgets which where configured by
+    // renaming column names.
+    lastRecord = grist.mapColumnNames(record) || record;
+    selectOnMap(lastRecord);
     scanOnNeed(defaultMapping(record, mappings));
+  } else {
+    const marker = selectMaker(record.id);
+    if (!marker) { return; }
+    markers.zoomToShowLayer(marker);
+    marker.openPopup();
   }
 });
 grist.onRecords((data, mappings) => {
@@ -253,6 +400,11 @@ grist.onRecords((data, mappings) => {
     scanOnNeed(defaultMapping(data[0], mappings));
   }
 });
+
+grist.onNewRecord(() => {
+  clearMakers();
+  clearMakers = () => {};
+})
 
 function updateMode() {
   if (mode === 'single') {
@@ -290,6 +442,7 @@ grist.ready({
     { name: "Address", type: 'Text', optional, optional},
     { name: "GeocodedAddress", type: 'Text', title: 'Geocoded Address', optional},
   ],
+  allowSelectBy: true,
   onEditOptions
 });
 
